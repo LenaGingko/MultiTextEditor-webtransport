@@ -44,7 +44,6 @@ const h3Server = new Http3Server({
 });
 
 h3Server.startServer();
-
 console.log("h3Server.address: ", h3Server.address()); //address() gives information about the current server address.
 
 (async () => {
@@ -62,6 +61,7 @@ console.log("h3Server.address: ", h3Server.address()); //address() gives informa
 
     // Reading from a bidirectional stream
     const bidiStream = await session.createBidirectionalStream();
+    console.log('created bidirectional stream. server');
     const reader = bidiStream.readable.getReader();
     const writer = bidiStream.writable.getWriter();
 
@@ -72,6 +72,7 @@ console.log("h3Server.address: ", h3Server.address()); //address() gives informa
     // Respond back to the client
     const responseMessage = 'Message received!';
     await writer.write(new TextEncoder().encode(responseMessage));
+    console.log('wrote response.');
     writer.close();
 
     session.closed.catch((err) => {

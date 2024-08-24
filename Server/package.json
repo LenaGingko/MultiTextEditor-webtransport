@@ -1,7 +1,7 @@
 {
   "name": "webtransport-1",
   "version": "0.0.1",
-  "description": "Socket.IO with WebTransport",
+  "description": "WebTransport Test",
   "private": true,
   "type": "module",
   "dependencies": {

@@ -5,7 +5,7 @@ var toolbarOptions = [
 ];
 
 async function connectToServer() {
-  const url = 'https://localhost:3000/transport';
+  const url = 'https://127.0.0.1:3000/transport';
   const transport = new WebTransport(url);
 
   const $status = document.getElementById("status");
@@ -27,8 +27,11 @@ async function connectToServer() {
   // You can now use the transport object to create streams, etc.
   // For example, creating a bidirectional stream:
   const stream = await transport.createBidirectionalStream();
+  console.log('created bidirectional stream.');
   const writer = stream.writable.getWriter();
+  console.log('got writer.');
   await writer.write(new TextEncoder().encode('Hello, world!'));
+  console.log('wrote hello world.');
   writer.close();
   console.log('Data sent and stream closed.');
   
