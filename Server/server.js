@@ -23,8 +23,14 @@ const httpsServer = createServer({
     });
     res.write(content);
     res.end();
+  } else if (req.method === "GET" && req.url === "/favicon.ico") {
+    const favicon = await readFile("./assets/favicon.ico");
+    res.writeHead(200, {
+      "content-type": "image/x-icon"
+    });
+    res.end(favicon);
   } else {
-    console.log(`server sends 404 error`);
+    console.log(`server sends 404 error for ${req.url}`);
     res.writeHead(404).end();
   }
 });
@@ -44,59 +50,42 @@ const h3Server = new Http3Server({
 });
 
 h3Server.startServer();
-console.log("h3Server.address: ", h3Server.address()); //address() gives information about the current server address.
+console.log("h3Server.address: ", h3Server.address());
 
 (async () => {
-  const stream = await h3Server.sessionStream("/transport"); // Updated path
-  const sessionReader = stream.getReader(); //reads stream hello world from client
+  const stream = await h3Server.sessionStream("/transport"); // Listen for WebTransport sessions
+  const sessionReader = stream.getReader(); // Reads incoming WebTransport sessions
 
   while (true) {
     const { done, value } = await sessionReader.read();
-    if (done) {
-      break;
-    }
+    if (done) break;
 
     const session = value;
-    console.log('New WebTransport session:', session);
+    console.log('New WebTransport session');
 
-    // Reading from a bidirectional stream
-    const bidiStream = await session.createBidirectionalStream();
-    console.log('created bidirectional stream. server');
-    const reader = bidiStream.readable.getReader();
-    const writer = bidiStream.writable.getWriter();
+    // Handling incoming bidirectional streams
+    const bds = session.incomingBidirectionalStreams;
+    const reader = bds.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    // Read the message sent by the client
-    const { value: message } = await reader.read();
-    console.log('Received message from client:', new TextDecoder().decode(message));
+      const bidiStream = value;
+      console.log('Received bidirectional stream.');
 
-    // Respond back to the client
-    const responseMessage = 'Message received!';
-    await writer.write(new TextEncoder().encode(responseMessage));
-    console.log('wrote response.');
-    writer.close();
+      // Read the message sent by the client
+      const { value: message } = await bidiStream.readable.getReader().read();
+      console.log('Received message from client:', new TextDecoder().decode(message));
 
-    session.closed.catch((err) => {
-      console.error('Session closed with error:', err);
-    });
-
-    // Start receiving bidirectional streams
-    await receiveBidirectional(session);
+      // Respond back to the client
+      const writer = bidiStream.writable.getWriter();
+      const responseMessage = 'Message from Server!';
+      await writer.write(new TextEncoder().encode(responseMessage));
+      await writer.close();
+      console.log('Sent response to client.');
+    }
   }
 })();
-
-async function receiveBidirectional(session) {
-  const bds = session.incomingBidirectionalStreams;
-  const reader = bds.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    // value is an instance of WebTransportBidirectionalStream
-    await readData(value.readable);
-    //await writeData(value.writable);
-  }
-}
 
 async function readData(readable) {
   const reader = readable.getReader();
@@ -105,16 +94,8 @@ async function readData(readable) {
     if (done) {
       break;
     }
-    // value is a Uint8Array.
+    
     console.log('Received data:', new TextDecoder().decode(value));
   }
 }
 
-async function writeData(writable) {
-  const writer = writable.getWriter();
-  const data1 = new Uint8Array([65, 66, 67]); // ABC
-  const data2 = new Uint8Array([68, 69, 70]); // DEF
-  await writer.write(data1);
-  await writer.write(data2);
-  writer.close();
-}
