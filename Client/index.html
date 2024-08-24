@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>WebTransport example</title>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js" defer></script>
+  </head>
+  <body>
+
+    <p>Status: <span id="status">Disconnected</span></p>
+    <p>Transport: <span id="transport">N/A</span></p>
+    <div id="editor-container"></div>
+
+    <script src="client.js"></script>
+
+    <style>
+      #editor-container {
+        height: 400px;
+      }
+    </style>
+  </body>
+</html>
