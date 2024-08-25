@@ -50,7 +50,6 @@ const h3Server = new Http3Server({
 });
 
 h3Server.startServer();
-console.log("h3Server.address: ", h3Server.address());
 
 (async () => {
   const stream = await h3Server.sessionStream("/transport"); // Listen for WebTransport sessions
