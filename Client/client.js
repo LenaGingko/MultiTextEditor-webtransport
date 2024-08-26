@@ -3,7 +3,8 @@ var toolbarOptions = [
   [{ 'list': 'ordered'}, { 'list': 'bullet' }],
   ['clean']                    // Remove formatting button
 ];
-async function connectToServer() {
+
+async function connectToServer(quill) { // Pass quill as a parameter
   const url = 'https://127.0.0.1:3000/transport';
   const transport = new WebTransport(url);
 
@@ -22,28 +23,55 @@ async function connectToServer() {
   $status.innerText = "Connected";
 
   const stream = await transport.createBidirectionalStream();
-  // stream is a WebTransportBidirectionalStream
-  // stream.readable is a ReadableStream
-  // stream.writable is a WritableStream
-  
   console.log('Created bidirectional stream.');
-  const writer = stream.writable.getWriter();
 
+  // Start reading from the server
+  readFromServer(stream.readable, quill); // Pass quill to readFromServer
+
+  const writer = stream.writable.getWriter();
   return writer; // Return the writer so it can be used to send data on text-change
 }
 
+async function readFromServer(readable, quill) { // Accept quill as a parameter
+  const reader = readable.getReader();
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        console.log('Stream has been closed by the server.');
+        break;
+      }
+
+      const decodedMessage = new TextDecoder().decode(value);
+      console.log('Received message from server:', decodedMessage);
+
+      try {
+        const delta = JSON.parse(decodedMessage);
+        quill.updateContents(delta); // Update the Quill editor with the delta
+      } catch (e) {
+        console.error('Error parsing message', e);
+      }
+    }
+  } catch (error) {
+    console.error('Error reading from stream:', error);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async function() {
-  var quill = new Quill('#editor-container', {
-      modules: {
-          toolbar: toolbarOptions
-      },
-      theme: 'snow'
+  const quill = new Quill('#editor-container', {
+    modules: {
+      toolbar: toolbarOptions
+    },
+    theme: 'snow'
   });
 
   let writer;
 
   try {
-    writer = await connectToServer(); // Initialize the WebTransport connection and get the writer
+    writer = await connectToServer(quill); // Pass quill when connecting to the server
   } catch (error) {
     console.error("Failed to connect to the server:", error);
     return;
@@ -58,7 +86,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
       writer.write(encodedDelta)
         .then(() => {
-          console.log('Delta sent:', delta);//works every time
+          console.log('Delta sent:', delta); // Works every time
         })
         .catch((error) => {
           console.error('Failed to send delta:', error);
