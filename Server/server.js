@@ -50,7 +50,6 @@ const h3Server = new Http3Server({
 });
 
 h3Server.startServer();
-/////////////////////////////////////////////////////////////////////
 
 // Keep track of all active WebTransport sessions
 const activeSessions = new Map();
@@ -62,12 +61,11 @@ const activeSessions = new Map();
   while (true) {
     const { done, value } = await sessionReader.read();
     if (done) break;
-
     const session = value;
     console.log('New WebTransport session');
-    activeSessions.set(session, new Map());
 
-    // Handling incoming bidirectional streams
+    activeSessions.set(session, null); // Initialize the session with a null writer
+
     handleBidirectionalStream(session);
   }
 })();
@@ -77,55 +75,59 @@ async function handleBidirectionalStream(session) {
   const reader = bds.getReader();
 
   while (true) {
-    const { done, value } = await reader.read(); // value is an instance of WebTransportReceiveStream
+    const { done, value } = await reader.read();
     if (done) break;
 
     const bidiStream = value;
     console.log('Received bidirectional stream.');
 
+    // Store the stream writer directly in the activeSessions map
+    const writer = bidiStream.writable.getWriter();
+    activeSessions.set(session, writer); // Store the writer for the session
+
     // Continuously read messages from the bidiStream
     const streamReader = bidiStream.readable.getReader();
-    const writer = bidiStream.writable.getWriter();
 
     try {
       while (true) {
-        const { done, value } = await streamReader.read(); // Read continuously
+        const { done, value } = await streamReader.read();
         if (done) break;
 
         const decodedMessage = new TextDecoder().decode(value);
         console.log('Received message from client:', decodedMessage);
 
-        // Echo the message back to the client
-        await writer.write(new TextEncoder().encode(decodedMessage));
-        console.log('Sent response to client.');
+        // Broadcast the message to all other clients except the sender
+        await broadcastMessageToAllClients(decodedMessage, session);
       }
     } catch (error) {
       console.error('Error handling stream:', error);
     } finally {
       streamReader.releaseLock(); // Release the reader lock after we're done
-      writer.releaseLock(); // Release the writer lock after we're done
     }
   }
 }
 
 async function broadcastMessageToAllClients(message, senderSession) {
-  console.log('broadcastMessageToAllClients');
+  console.log('Broadcasting message to all clients');
+  console.log('Active Sessions Map:', activeSessions.size);
 
-  for (const [clientSession, streams] of activeSessions) {
-    if (clientSession !== senderSession) {
-      console.log('Broadcasting to session:', clientSession);
-
-      for (const writer of streams.values()) { // Iterate through all stored writers
-        try {
+  for (const [clientSession, writer] of activeSessions) {
+    console.log('clientSession !== senderSession: ', clientSession !== senderSession);
+    if (clientSession !== senderSession) { // Exclude the sender
+      try {
+        if (writer) {  // Ensure the writer is valid
           await writer.write(new TextEncoder().encode(message));
           console.log('Message sent to client.');
-        } catch (err) {
-          console.error('Error sending message to client:', err);
+        } else {
+          console.log('Writer is invalid or not available for session:', clientSession);
         }
+      } catch (err) {
+        console.error('Error sending message to client:', err);
       }
     }
   }
 }
+
 ///////////////////////////////////////////////////////////////////////////7
 /*(async () => {
   const stream = await h3Server.sessionStream("/transport"); // Listen for WebTransport sessions

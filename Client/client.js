@@ -4,7 +4,7 @@ var toolbarOptions = [
   ['clean']                    // Remove formatting button
 ];
 
-async function connectToServer(quill) { // Pass quill as a parameter
+async function connectToServer(quill) {
   const url = 'https://127.0.0.1:3000/transport';
   const transport = new WebTransport(url);
 
@@ -32,7 +32,7 @@ async function connectToServer(quill) { // Pass quill as a parameter
   return writer; // Return the writer so it can be used to send data on text-change
 }
 
-async function readFromServer(readable, quill) { // Accept quill as a parameter
+async function readFromServer(readable, quill) {
   const reader = readable.getReader();
 
   try {
@@ -48,7 +48,7 @@ async function readFromServer(readable, quill) { // Accept quill as a parameter
 
       try {
         const delta = JSON.parse(decodedMessage);
-        quill.updateContents(delta); // Update the Quill editor with the delta
+        quill.updateContents(delta, 'remote');
       } catch (e) {
         console.error('Error parsing message', e);
       }
