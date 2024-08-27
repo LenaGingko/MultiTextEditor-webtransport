@@ -1,11 +1,11 @@
 var toolbarOptions = [
   ['bold', 'italic'],
   [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-  ['clean']                    // Remove formatting button
+  ['clean']  
 ];
 
 async function connectToServer(quill) {
-  const url = 'https://127.0.0.1:3000/transport';
+  const url = 'https://127.0.0.1:3000/transport'; // h3Server.sessionStream("/transport");
   const transport = new WebTransport(url);
 
   const $status = document.getElementById("status");

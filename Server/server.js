@@ -51,20 +51,21 @@ const h3Server = new Http3Server({
 
 h3Server.startServer();
 
-// Keep track of all active WebTransport sessions
-const activeSessions = new Map();
+
+const activeSessions = new Map(); // for all active sessions: session -> writer
 
 (async () => {
-  const stream = await h3Server.sessionStream("/transport"); // Listen for WebTransport sessions
+  const stream = await h3Server.sessionStream("/transport"); //client 'https://127.0.0.1:3000/transport'
   const sessionReader = stream.getReader(); // Reads incoming WebTransport sessions
 
+  //wait for session
   while (true) {
     const { done, value } = await sessionReader.read();
     if (done) break;
     const session = value;
-    console.log('New WebTransport session');
+    console.log('New WebTransport session.');
 
-    activeSessions.set(session, null); // Initialize the session with a null writer
+    activeSessions.set(session, null); // session initialyze
 
     handleBidirectionalStream(session);
   }
@@ -73,106 +74,68 @@ const activeSessions = new Map();
 async function handleBidirectionalStream(session) {
   const bds = session.incomingBidirectionalStreams;
   const reader = bds.getReader();
-
+  
+  //wait for bidirectional stream
   while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    try{
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    const bidiStream = value;
-    console.log('Received bidirectional stream.');
+      const bidiStream = value;
+      console.log('Bidirectional stream.');
 
-    // Store the stream writer directly in the activeSessions map
-    const writer = bidiStream.writable.getWriter();
-    activeSessions.set(session, writer); // Store the writer for the session
+      // stream writer
+      const writer = bidiStream.writable.getWriter();
+      activeSessions.set(session, writer); // session -> writer
 
-    // Continuously read messages from the bidiStream
-    const streamReader = bidiStream.readable.getReader();
+      // always read messages from the bidiStream
+      const streamReader = bidiStream.readable.getReader();
 
-    try {
-      while (true) {
-        const { done, value } = await streamReader.read();
-        if (done) break;
+      try {
+        //wait for sent messages
+        while (true) {
+          const { done, value } = await streamReader.read();
+          if (done) break;
 
-        const decodedMessage = new TextDecoder().decode(value);
-        console.log('Received message from client:', decodedMessage);
+          const decodedMessage = new TextDecoder().decode(value);
+          console.log('Message: ', decodedMessage);
 
-        // Broadcast the message to all other clients except the sender
-        await broadcastMessageToAllClients(decodedMessage, session);
+          // Broadcast the message to all other clients except the sender
+          await broadcastMessageToAllClients(decodedMessage, session);
+        }
+      } catch (error) {
+        console.error('Error handling stream: ', error);
+      } finally {
+        streamReader.releaseLock();
       }
     } catch (error) {
-      console.error('Error handling stream:', error);
-    } finally {
-      streamReader.releaseLock(); // Release the reader lock after we're done
+      if (error.name === 'WebTransportError') {
+        console.log('Session closed:', error);
+        activeSessions.delete(session);
+        break;
+      } else {
+        console.error('Unexpected error:', error);
+      }
     }
   }
 }
 
 async function broadcastMessageToAllClients(message, senderSession) {
-  console.log('Broadcasting message to all clients');
-  console.log('Active Sessions Map:', activeSessions.size);
+  console.log('Active Sessions Map:', activeSessions.size); //how many clients
 
   for (const [clientSession, writer] of activeSessions) {
-    console.log('clientSession !== senderSession: ', clientSession !== senderSession);
-    if (clientSession !== senderSession) { // Exclude the sender
+    //not send back to sender
+    if (clientSession !== senderSession) {
       try {
-        if (writer) {  // Ensure the writer is valid
+        if (writer) {  //is initiated
           await writer.write(new TextEncoder().encode(message));
-          console.log('Message sent to client.');
+          //console.log('Message sent to client.');
         } else {
-          console.log('Writer is invalid or not available for session:', clientSession);
+          console.log('Writer is invalid or not available for session: ', clientSession);
         }
       } catch (err) {
-        console.error('Error sending message to client:', err);
+        console.error('Error sending message to client: ', err);
       }
     }
   }
 }
-
-///////////////////////////////////////////////////////////////////////////7
-/*(async () => {
-  const stream = await h3Server.sessionStream("/transport"); // Listen for WebTransport sessions
-  const sessionReader = stream.getReader(); // Reads incoming WebTransport sessions
-
-  while (true) {
-    const { done, value } = await sessionReader.read();
-    if (done) break;
-
-    const session = value;
-    console.log('New WebTransport session');
-
-    // Handling incoming bidirectional streams
-    const bds = session.incomingBidirectionalStreams;
-    const reader = bds.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const bidiStream = value;
-      console.log('Received bidirectional stream.');
-
-      // Read the message sent by the client
-      const { value: message } = await bidiStream.readable.getReader().read();
-      console.log('Received message from client:', new TextDecoder().decode(message));
-
-      // Respond back to the client
-      const writer = bidiStream.writable.getWriter();
-      const responseMessage = 'Message from Server!';
-      await writer.write(new TextEncoder().encode(responseMessage));
-      await writer.close();
-      console.log('Sent response to client.');
-    }
-  }
-})();
-
-async function readData(readable) {//from docs
-  const reader = readable.getReader();
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) {
-      break;
-    }
-    
-    console.log('Received data:', new TextDecoder().decode(value));
-  }
-}*/
-
