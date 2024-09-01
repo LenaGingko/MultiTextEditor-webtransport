@@ -4,19 +4,13 @@ var toolbarOptions = [
   ['clean']  
 ];
 
+const url = '141.57.68.161'; //'193.175.5.170' ; //public id global am besten
+
 async function connectToServer(quill) {
-  const url = 'https://127.0.0.1:3000/transport'; // h3Server.sessionStream("/transport");
-  const transport = new WebTransport(url);
+  const adress = 'https://' + url + ':3000/transport';
+  const transport = new WebTransport(adress);
 
   const $status = document.getElementById("status");
-
-  transport.closed.then(() => {
-    console.log(`The HTTP/3 connection to ${url} closed gracefully.`);
-    $status.innerText = "Disconnected";
-  }).catch((error) => {
-    console.error(`The HTTP/3 connection to ${url} closed due to ${error}.`);
-    $status.innerText = "Disconnected";
-  });
 
   await transport.ready;
   console.log('The WebTransport connection is now ready.');
@@ -26,10 +20,21 @@ async function connectToServer(quill) {
   console.log('Created bidirectional stream.');
 
   // Start reading from the server
-  readFromServer(stream.readable, quill); // Pass quill to readFromServer
+  readFromServer(stream.readable, quill);
 
   const writer = stream.writable.getWriter();
-  return writer; // Return the writer so it can be used to send data on text-change
+
+  // Notify the server of disconnection
+  transport.closed.then(async () => {
+    console.log(`The HTTP/3 connection to ${url} closed gracefully.`);
+
+    $status.innerText = "Disconnected";
+  }).catch((error) => {
+    console.error(`The HTTP/3 connection to ${url} closed due to ${error}.`);
+    $status.innerText = "Disconnected";
+  });
+
+  return writer;
 }
 
 async function readFromServer(readable, quill) {

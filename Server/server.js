@@ -36,14 +36,15 @@ const httpsServer = createServer({
 });
 
 const port = process.env.PORT || 3000;
-
+const url = '141.57.68.161' ; //local id htwk vpn //141.57.68.161 vorher .184
+//Verbindungsspezifisches DNS-Suffix: htwk-leipzig.de
 httpsServer.listen(port, () => {
-  console.log(`server listening at https://localhost:${port}`);
+  console.log(`server listening at https://${url}:${port}`);
 });
 
 const h3Server = new Http3Server({
   port,
-  host: '127.0.0.1',
+  host: '141.57.68.161',
   secret: 'mysecret',
   cert,
   privKey: key,
@@ -61,7 +62,10 @@ const activeSessions = new Map(); // for all active sessions: session -> writer
   //wait for session
   while (true) {
     const { done, value } = await sessionReader.read();
-    if (done) break;
+    if (done) {
+      
+      break;
+    }
     const session = value;
     console.log('New WebTransport session.');
 
@@ -69,38 +73,40 @@ const activeSessions = new Map(); // for all active sessions: session -> writer
 
     handleBidirectionalStream(session);
   }
+  console.log('Session closed.');//added this so 1 error
+  activeSessions.delete(session);
 })();
+
 
 async function handleBidirectionalStream(session) {
   const bds = session.incomingBidirectionalStreams;
   const reader = bds.getReader();
-  
-  //wait for bidirectional stream
+
+  // Wait for bidirectional streams
   while (true) {
-    try{
+    try {
       const { done, value } = await reader.read();
       if (done) break;
 
       const bidiStream = value;
       console.log('Bidirectional stream.');
 
-      // stream writer
       const writer = bidiStream.writable.getWriter();
-      activeSessions.set(session, writer); // session -> writer
+      activeSessions.set(session, writer); // Update map with session -> writer
 
-      // always read messages from the bidiStream
+      // read messages from the bidiStream
       const streamReader = bidiStream.readable.getReader();
 
       try {
-        //wait for sent messages
+        // Wait for messages
         while (true) {
           const { done, value } = await streamReader.read();
           if (done) break;
 
           const decodedMessage = new TextDecoder().decode(value);
+          
           console.log('Message: ', decodedMessage);
 
-          // Broadcast the message to all other clients except the sender
           await broadcastMessageToAllClients(decodedMessage, session);
         }
       } catch (error) {
@@ -111,6 +117,7 @@ async function handleBidirectionalStream(session) {
     } catch (error) {
       if (error.name === 'WebTransportError') {
         console.log('Session closed:', error);
+        // Remove the session from activeSessions when it closes
         activeSessions.delete(session);
         break;
       } else {
@@ -121,15 +128,14 @@ async function handleBidirectionalStream(session) {
 }
 
 async function broadcastMessageToAllClients(message, senderSession) {
-  console.log('Active Sessions Map:', activeSessions.size); //how many clients
+  console.log('Active Sessions Map:', activeSessions.size); // number of active clients
 
   for (const [clientSession, writer] of activeSessions) {
-    //not send back to sender
+    // not send back to sender
     if (clientSession !== senderSession) {
       try {
-        if (writer) {  //is initiated
+        if (writer) { // Check if writer is valid
           await writer.write(new TextEncoder().encode(message));
-          //console.log('Message sent to client.');
         } else {
           console.log('Writer is invalid or not available for session: ', clientSession);
         }
