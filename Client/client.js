@@ -4,7 +4,7 @@ var toolbarOptions = [
   ['clean']  
 ];
 
-const url = '141.57.68.161'; //'193.175.5.170' ; //public id global am besten
+const url = '141.57.68.145'; //'193.175.5.170' ; //public id global am besten
 
 async function connectToServer(quill) {
   const adress = 'https://' + url + ':3000/transport';

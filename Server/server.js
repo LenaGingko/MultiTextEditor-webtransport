@@ -36,7 +36,7 @@ const httpsServer = createServer({
 });
 
 const port = process.env.PORT || 3000;
-const url = '141.57.68.161' ; //local id htwk vpn //141.57.68.161 vorher .184
+const url = '141.57.68.145' ; //local id htwk vpn //141.57.68.161 vorher 
 //Verbindungsspezifisches DNS-Suffix: htwk-leipzig.de
 httpsServer.listen(port, () => {
   console.log(`server listening at https://${url}:${port}`);
@@ -44,7 +44,7 @@ httpsServer.listen(port, () => {
 
 const h3Server = new Http3Server({
   port,
-  host: '141.57.68.161',
+  host: '141.57.68.145',
   secret: 'mysecret',
   cert,
   privKey: key,
