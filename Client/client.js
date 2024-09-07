@@ -4,7 +4,7 @@ var toolbarOptions = [
   ['clean']  
 ];
 
-const url = '141.57.68.145'; //'193.175.5.170' ; //public id global am besten
+const url = '192.168.0.104'; //public id global am besten
 
 async function connectToServer(quill) {
   const adress = 'https://' + url + ':3000/transport';
@@ -39,6 +39,7 @@ async function connectToServer(quill) {
 
 async function readFromServer(readable, quill) {
   const reader = readable.getReader();
+  let buffer = ""; // Buffer to accumulate incomplete messages
 
   try {
     while (true) {
@@ -49,13 +50,22 @@ async function readFromServer(readable, quill) {
       }
 
       const decodedMessage = new TextDecoder().decode(value);
-      console.log('Received message from server:', decodedMessage);
+      buffer += decodedMessage;
 
+      // Check if buffer contains a complete JSON object
       try {
-        const delta = JSON.parse(decodedMessage);
-        quill.updateContents(delta, 'remote');
+        const parsedMessage = JSON.parse(buffer);
+        
+        // If parsing succeeds, reset the buffer and process the message
+        buffer = ""; // Clear buffer after successful parsing
+
+        console.log('Received complete message:', parsedMessage);
+
+        // Process the parsed delta
+        quill.updateContents(parsedMessage, 'remote');
       } catch (e) {
-        console.error('Error parsing message', e);
+        // Catch the JSON parse error; message might be incomplete
+        console.log('Incomplete message, waiting for more chunks...');
       }
     }
   } catch (error) {

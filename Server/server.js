@@ -36,7 +36,7 @@ const httpsServer = createServer({
 });
 
 const port = process.env.PORT || 3000;
-const url = '141.57.68.145' ; //local id htwk vpn //141.57.68.161 vorher 
+const url = '192.168.0.104' ; //local id htwk vpn //141.57.68.161 vorher 
 //Verbindungsspezifisches DNS-Suffix: htwk-leipzig.de
 httpsServer.listen(port, () => {
   console.log(`server listening at https://${url}:${port}`);
@@ -44,7 +44,7 @@ httpsServer.listen(port, () => {
 
 const h3Server = new Http3Server({
   port,
-  host: '141.57.68.145',
+  host: '192.168.0.104',
   secret: 'mysecret',
   cert,
   privKey: key,
@@ -56,31 +56,49 @@ h3Server.startServer();
 const activeSessions = new Map(); // for all active sessions: session -> writer
 
 (async () => {
-  const stream = await h3Server.sessionStream("/transport"); //client 'https://127.0.0.1:3000/transport'
-  const sessionReader = stream.getReader(); // Reads incoming WebTransport sessions
+  const sessionStream = await h3Server.sessionStream("/transport"); //client 'https://127.0.0.1:3000/transport'
+  const sessionReader = sessionStream.getReader(); // Reads incoming WebTransport sessions
+  sessionReader.closed.catch((e) => console.log("sessionReader closed with error!", e));
 
   //wait for session
   while (true) {
+    console.log("sessionReader.read() - waiting for session...");
     const { done, value } = await sessionReader.read();
     if (done) {
-      
+      console.log("done! session");
       break;
     }
-    const session = value;
+    //const session = value;
     console.log('New WebTransport session.');
 
-    activeSessions.set(session, null); // session initialyze
+    activeSessions.set(value, null); // session initialyze
 
-    handleBidirectionalStream(session);
+    //handleBidirectionalStream(value);
+    value.ready.then(async () => {
+      console.log("session ready!");
+      handleBidirectionalStream(value);
+    }).catch((e) => {
+      console.log("session failed to be ready!", e);
+    });
+
+    value.closed
+      .then(() => {
+        activeSessions.delete(value); // Remove session from activeSessions
+        console.log("Session closed gracefully.");
+      })
+      .catch((error) => {
+        activeSessions.delete(session); // Cleanup even on error
+        console.error(`Session closed with error: ${error}`);
+      });
   }
-  console.log('Session closed.');//added this so 1 error
-  activeSessions.delete(session);
+  console.log('Session closed..................while loop over'); //added this to avoid 1 error
 })();
 
 
 async function handleBidirectionalStream(session) {
-  const bds = session.incomingBidirectionalStreams;
-  const reader = bds.getReader();
+  const bdStream = session.incomingBidirectionalStreams;
+  const reader = bdStream.getReader();
+  let buffer = ""; // Buffer to accumulate incomplete messages
 
   // Wait for bidirectional streams
   while (true) {
@@ -104,10 +122,21 @@ async function handleBidirectionalStream(session) {
           if (done) break;
 
           const decodedMessage = new TextDecoder().decode(value);
-          
-          console.log('Message: ', decodedMessage);
+          buffer += decodedMessage;
 
-          await broadcastMessageToAllClients(decodedMessage, session);
+          try {
+            const message = JSON.parse(buffer);
+
+            // Clear the buffer after successful parsing
+            buffer = "";
+
+            console.log('Message: ', message);
+            await broadcastMessageToAllClients(JSON.stringify(message), session);
+
+          } catch (error) {
+            // JSON is incomplete, keep buffering
+            console.log('Incomplete message, buffering...');
+          }
         }
       } catch (error) {
         console.error('Error handling stream: ', error);
@@ -118,7 +147,9 @@ async function handleBidirectionalStream(session) {
       if (error.name === 'WebTransportError') {
         console.log('Session closed:', error);
         // Remove the session from activeSessions when it closes
-        activeSessions.delete(session);
+        if (activeSessions.has(session)) {
+          activeSessions.delete(session);
+        }
         break;
       } else {
         console.error('Unexpected error:', error);
