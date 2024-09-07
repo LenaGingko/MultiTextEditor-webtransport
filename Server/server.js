@@ -62,7 +62,6 @@ const activeSessions = new Map(); // for all active sessions: session -> writer
 
   //wait for session
   while (true) {
-    console.log("sessionReader.read() - waiting for session...");
     const { done, value } = await sessionReader.read();
     if (done) {
       console.log("done! session");
@@ -84,7 +83,8 @@ const activeSessions = new Map(); // for all active sessions: session -> writer
     value.closed
       .then(() => {
         activeSessions.delete(value); // Remove session from activeSessions
-        console.log("Session closed gracefully.");
+        const timestamp = new Date().toLocaleTimeString(); // Get only the time (HH:MM:SS format)
+        console.log(`[${timestamp}] Session closed gracefully.`);
       })
       .catch((error) => {
         activeSessions.delete(session); // Cleanup even on error
@@ -107,7 +107,6 @@ async function handleBidirectionalStream(session) {
       if (done) break;
 
       const bidiStream = value;
-      console.log('Bidirectional stream.');
 
       const writer = bidiStream.writable.getWriter();
       activeSessions.set(session, writer); // Update map with session -> writer
@@ -126,9 +125,13 @@ async function handleBidirectionalStream(session) {
 
           try {
             const message = JSON.parse(buffer);
-
-            // Clear the buffer after successful parsing
             buffer = "";
+
+            if (message.type === 'ping') {
+              //const timestamp = new Date().toLocaleTimeString();
+              //console.log(`[${timestamp}] Received ping, ignoring...`);
+              continue;
+            }
 
             console.log('Message: ', message);
             await broadcastMessageToAllClients(JSON.stringify(message), session);
@@ -159,13 +162,16 @@ async function handleBidirectionalStream(session) {
 }
 
 async function broadcastMessageToAllClients(message, senderSession) {
-  console.log('Active Sessions Map:', activeSessions.size); // number of active clients
+  const timestamp = new Date().toLocaleTimeString();
+  console.log(`[${timestamp}] Active Sessions Map:`, activeSessions.size);  // number of active clients
 
   for (const [clientSession, writer] of activeSessions) {
     // not send back to sender
     if (clientSession !== senderSession) {
       try {
         if (writer) { // Check if writer is valid
+          //const timestamp = new Date().toISOString();
+          //console.log(`[${timestamp}] writing from server.`);
           await writer.write(new TextEncoder().encode(message));
         } else {
           console.log('Writer is invalid or not available for session: ', clientSession);

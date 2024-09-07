@@ -24,10 +24,14 @@ async function connectToServer(quill) {
 
   const writer = stream.writable.getWriter();
 
+  setInterval(() => {
+    writer.write(new TextEncoder().encode(JSON.stringify({ type: 'ping' })));
+    console.log('Ping sent to keep the connection alive');
+  }, 29000); //33sek
+
   // Notify the server of disconnection
   transport.closed.then(async () => {
     console.log(`The HTTP/3 connection to ${url} closed gracefully.`);
-
     $status.innerText = "Disconnected";
   }).catch((error) => {
     console.error(`The HTTP/3 connection to ${url} closed due to ${error}.`);
@@ -94,14 +98,12 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   quill.on('text-change', function(delta, oldDelta, source) {
     if (source === 'user') {
-      console.log("Text change detected!");
-
       const deltaString = JSON.stringify(delta); // Serialize the delta object
       const encodedDelta = new TextEncoder().encode(deltaString); // Encode as Uint8Array
 
       writer.write(encodedDelta)
         .then(() => {
-          console.log('Delta sent:', delta); // Works every time
+          //console.log('Delta sent:', delta); // Works every time
         })
         .catch((error) => {
           console.error('Failed to send delta:', error);
