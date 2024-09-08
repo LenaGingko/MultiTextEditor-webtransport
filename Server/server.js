@@ -82,23 +82,22 @@ const activeSessions = new Map(); // for all active sessions: session -> writer
 
     value.closed
       .then(() => {
-        activeSessions.delete(value); // Remove session from activeSessions
-        const timestamp = new Date().toLocaleTimeString(); // Get only the time (HH:MM:SS format)
+        activeSessions.delete(value); 
+        const timestamp = new Date().toLocaleTimeString(); 
         console.log(`[${timestamp}] Session closed gracefully.`);
       })
       .catch((error) => {
-        activeSessions.delete(session); // Cleanup even on error
+        activeSessions.delete(session);
         console.error(`Session closed with error: ${error}`);
       });
   }
-  console.log('Session closed..................while loop over'); //added this to avoid 1 error
 })();
 
 
 async function handleBidirectionalStream(session) {
   const bdStream = session.incomingBidirectionalStreams;
   const reader = bdStream.getReader();
-  let buffer = ""; // Buffer to accumulate incomplete messages
+  let buffer = "";
 
   // Wait for bidirectional streams
   while (true) {
@@ -119,19 +118,18 @@ async function handleBidirectionalStream(session) {
         while (true) {
           const { done, value } = await streamReader.read();
           if (done) break;
-
+          console.log(`${getFormattedTimestamp()} Message read from client`); 
           const decodedMessage = new TextDecoder().decode(value);
+          //console.log(`${getFormattedTimestamp()} Message read from client2`);
           buffer += decodedMessage;
 
           try {
             const message = JSON.parse(buffer);
             buffer = "";
 
-            if (message.type === 'ping') {
-              //const timestamp = new Date().toLocaleTimeString();
-              //console.log(`[${timestamp}] Received ping, ignoring...`);
-              continue;
-            }
+            if (message.type === 'ping') { continue; }
+
+            console.log(`${getFormattedTimestamp()} Message decoded from client`); 
 
             console.log('Message: ', message);
             await broadcastMessageToAllClients(JSON.stringify(message), session);
@@ -149,7 +147,6 @@ async function handleBidirectionalStream(session) {
     } catch (error) {
       if (error.name === 'WebTransportError') {
         console.log('Session closed:', error);
-        // Remove the session from activeSessions when it closes
         if (activeSessions.has(session)) {
           activeSessions.delete(session);
         }
@@ -162,16 +159,14 @@ async function handleBidirectionalStream(session) {
 }
 
 async function broadcastMessageToAllClients(message, senderSession) {
-  const timestamp = new Date().toLocaleTimeString();
-  console.log(`[${timestamp}] Active Sessions Map:`, activeSessions.size);  // number of active clients
+  //console.log(`${getFormattedTimestamp()}  Active Sessions Map:`, activeSessions.size);  // number of active clients
 
   for (const [clientSession, writer] of activeSessions) {
     // not send back to sender
     if (clientSession !== senderSession) {
       try {
         if (writer) { // Check if writer is valid
-          //const timestamp = new Date().toISOString();
-          //console.log(`[${timestamp}] writing from server.`);
+          console.log(`${getFormattedTimestamp()}  Server writes `); 
           await writer.write(new TextEncoder().encode(message));
         } else {
           console.log('Writer is invalid or not available for session: ', clientSession);
@@ -181,4 +176,11 @@ async function broadcastMessageToAllClients(message, senderSession) {
       }
     }
   }
+}
+
+function getFormattedTimestamp() {
+  const now = new Date();
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+  return `[sek:${seconds}, millisek:${milliseconds}]`;
 }

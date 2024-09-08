@@ -26,7 +26,7 @@ async function connectToServer(quill) {
 
   setInterval(() => {
     writer.write(new TextEncoder().encode(JSON.stringify({ type: 'ping' })));
-    console.log('Ping sent to keep the connection alive');
+    //console.log('Ping sent to keep the connection alive');
   }, 29000); //33sek
 
   // Notify the server of disconnection
@@ -52,7 +52,8 @@ async function readFromServer(readable, quill) {
         console.log('Stream has been closed by the server.');
         break;
       }
-
+      console.log(`${getFormattedTimestamp()} Data read from stream.`);
+      
       const decodedMessage = new TextDecoder().decode(value);
       buffer += decodedMessage;
 
@@ -63,7 +64,7 @@ async function readFromServer(readable, quill) {
         // If parsing succeeds, reset the buffer and process the message
         buffer = ""; // Clear buffer after successful parsing
 
-        console.log('Received complete message:', parsedMessage);
+        console.log(`${getFormattedTimestamp()} Data decoded from stream.`);
 
         // Process the parsed delta
         quill.updateContents(parsedMessage, 'remote');
@@ -101,9 +102,10 @@ document.addEventListener('DOMContentLoaded', async function() {
       const deltaString = JSON.stringify(delta); // Serialize the delta object
       const encodedDelta = new TextEncoder().encode(deltaString); // Encode as Uint8Array
 
+      console.log(`${getFormattedTimestamp()} Writing delta to stream.`)
       writer.write(encodedDelta)
         .then(() => {
-          //console.log('Delta sent:', delta); // Works every time
+          console.log(`${getFormattedTimestamp()} Delta sent:`, delta); 
         })
         .catch((error) => {
           console.error('Failed to send delta:', error);
@@ -111,3 +113,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   });
 });
+
+function getFormattedTimestamp() {
+  const now = new Date();
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+  return `[sek:${seconds}, millisek:${milliseconds}]`;
+}
