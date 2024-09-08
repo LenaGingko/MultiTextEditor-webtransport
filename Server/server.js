@@ -101,80 +101,82 @@ async function handleBidirectionalStream(session) {
 
   // Wait for bidirectional streams
   while (true) {
-    try {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const bidiStream = value;
-
-      const writer = bidiStream.writable.getWriter();
-      activeSessions.set(session, writer); // Update map with session -> writer
-
-      // read messages from the bidiStream
-      const streamReader = bidiStream.readable.getReader();
-
       try {
-        // Wait for messages
-        while (true) {
-          const { done, value } = await streamReader.read();
+          const { done, value } = await reader.read();
           if (done) break;
-          console.log(`${getFormattedTimestamp()} Message read from client`); 
-          const decodedMessage = new TextDecoder().decode(value);
-          //console.log(`${getFormattedTimestamp()} Message read from client2`);
-          buffer += decodedMessage;
+
+          const bidiStream = value;
+          const writer = bidiStream.writable.getWriter();
+          activeSessions.set(session, writer); // Update map with session -> writer
+
+          // read messages from the bidiStream
+          const streamReader = bidiStream.readable.getReader();
 
           try {
-            const message = JSON.parse(buffer);
-            buffer = "";
+            // Wait for messages
+              while (true) {
+                  const { done, value } = await streamReader.read();
+                  if (done) break;
 
-            if (message.type === 'ping') { continue; }
+                  const decodedMessage = new TextDecoder().decode(value);
+                  buffer += decodedMessage;
 
-            console.log(`${getFormattedTimestamp()} Message decoded from client`); 
+                  try {
+                      const message = JSON.parse(buffer);
+                      buffer = "";
 
-            console.log('Message: ', message);
-            await broadcastMessageToAllClients(JSON.stringify(message), session);
+                      // Add server reception timestamp
+                      const serverReceivedTimestamp = Date.now();
+                      console.log(`${getFormattedTimestamp()} Server received message from client`);
 
+                      if (message.type === 'ping') { continue; }
+                      console.log('Message: ', message);
+                      // Attach server's timestamp before broadcasting
+                      message.serverReceivedTimestamp = serverReceivedTimestamp;
+
+                      console.log(`${getFormattedTimestamp()} Broadcasting message to other clients`);
+                      await broadcastMessageToAllClients(JSON.stringify(message), session);
+
+                  } catch (error) {
+                      console.log('Incomplete message, buffering...');
+                  }
+              }
           } catch (error) {
-            // JSON is incomplete, keep buffering
-            console.log('Incomplete message, buffering...');
+              console.error('Error handling stream: ', error);
+          } finally {
+              streamReader.releaseLock();
           }
-        }
       } catch (error) {
-        console.error('Error handling stream: ', error);
-      } finally {
-        streamReader.releaseLock();
+          if (error.name === 'WebTransportError') {
+              console.log('Session closed:', error);
+              activeSessions.delete(session);
+              break;
+          } else {
+              console.error('Unexpected error:', error);
+          }
       }
-    } catch (error) {
-      if (error.name === 'WebTransportError') {
-        console.log('Session closed:', error);
-        if (activeSessions.has(session)) {
-          activeSessions.delete(session);
-        }
-        break;
-      } else {
-        console.error('Unexpected error:', error);
-      }
-    }
   }
 }
 
 async function broadcastMessageToAllClients(message, senderSession) {
   //console.log(`${getFormattedTimestamp()}  Active Sessions Map:`, activeSessions.size);  // number of active clients
-
   for (const [clientSession, writer] of activeSessions) {
     // not send back to sender
-    if (clientSession !== senderSession) {
-      try {
-        if (writer) { // Check if writer is valid
-          console.log(`${getFormattedTimestamp()}  Server writes `); 
-          await writer.write(new TextEncoder().encode(message));
-        } else {
-          console.log('Writer is invalid or not available for session: ', clientSession);
-        }
-      } catch (err) {
-        console.error('Error sending message to client: ', err);
+      if (clientSession !== senderSession) {
+          try {
+              if (writer) {
+                  console.log(`${getFormattedTimestamp()} Server writing message to another client`);
+                  const messageWithTimestamp = JSON.parse(message);
+                  messageWithTimestamp.serverSentTimestamp = Date.now(); // Add timestamp when server forwards the message
+
+                  await writer.write(new TextEncoder().encode(JSON.stringify(messageWithTimestamp)));
+              } else {
+                  console.log('Writer is invalid or not available for session: ', clientSession);
+              }
+          } catch (err) {
+              console.error('Error sending message to client: ', err);
+          }
       }
-    }
   }
 }
 

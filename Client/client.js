@@ -46,28 +46,33 @@ async function readFromServer(readable, quill) {
   let buffer = ""; // Buffer to accumulate incomplete messages
 
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        console.log('Stream has been closed by the server.');
-        break;
-      }
-      console.log(`${getFormattedTimestamp()} Data read from stream.`);
-      
-      const decodedMessage = new TextDecoder().decode(value);
-      buffer += decodedMessage;
+      while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+              console.log('Stream has been closed by the server.');
+              break;
+          }
+          console.log(`${getFormattedTimestamp()} Data read from stream.`);
+          
+          const decodedMessage = new TextDecoder().decode(value);
+          buffer += decodedMessage;
 
-      // Check if buffer contains a complete JSON object
-      try {
-        const parsedMessage = JSON.parse(buffer);
-        
-        // If parsing succeeds, reset the buffer and process the message
-        buffer = ""; // Clear buffer after successful parsing
+          try {
+              const parsedMessage = JSON.parse(buffer);
+              buffer = ""; // Clear buffer after successful parsing
 
-        console.log(`${getFormattedTimestamp()} Data decoded from stream.`);
+              const clientReceivedTimestamp = Date.now(); // Timestamp when the message is received by this client
 
-        // Process the parsed delta
-        quill.updateContents(parsedMessage, 'remote');
+              // Calculate the time taken
+              const sendToServerLatency = parsedMessage.serverReceivedTimestamp - parsedMessage.timestamp;
+              const serverToClientLatency = clientReceivedTimestamp - parsedMessage.serverSentTimestamp;
+              const totalLatency = clientReceivedTimestamp - parsedMessage.timestamp;
+
+              console.log(`${getFormattedTimestamp()} Message latency from sender to server: ${sendToServerLatency}ms`);
+              console.log(`${getFormattedTimestamp()} Message latency from server to client: ${serverToClientLatency}ms`);
+              console.log(`${getFormattedTimestamp()} Total round trip latency: ${totalLatency}ms`);
+
+              quill.updateContents(parsedMessage.delta, 'remote');
       } catch (e) {
         // Catch the JSON parse error; message might be incomplete
         console.log('Incomplete message, waiting for more chunks...');
@@ -99,17 +104,21 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   quill.on('text-change', function(delta, oldDelta, source) {
     if (source === 'user') {
-      const deltaString = JSON.stringify(delta); // Serialize the delta object
-      const encodedDelta = new TextEncoder().encode(deltaString); // Encode as Uint8Array
-
-      console.log(`${getFormattedTimestamp()} Writing delta to stream.`)
-      writer.write(encodedDelta)
-        .then(() => {
-          console.log(`${getFormattedTimestamp()} Delta sent:`, delta); 
-        })
-        .catch((error) => {
-          console.error('Failed to send delta:', error);
+        const deltaString = JSON.stringify({
+            delta,
+            timestamp: Date.now() // Add a timestamp when the message is sent
         });
+
+        const encodedDelta = new TextEncoder().encode(deltaString);
+
+        console.log(`${getFormattedTimestamp()} Writing delta to stream.`)
+        writer.write(encodedDelta)
+            .then(() => {
+                console.log(`${getFormattedTimestamp()} Delta sent:`, delta); 
+            })
+            .catch((error) => {
+                console.error('Failed to send delta:', error);
+            });
     }
   });
 });
