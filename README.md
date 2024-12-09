@@ -3,8 +3,6 @@ Webtransport: https://developer.chrome.com/docs/capabilities/web-apis/webtranspo
 
 The text-editor is simply quillJS.
 
-In the Firefox browser you will get a security warning the first time but after pressing Continue it should work. Chrome is more strict with the security certificate...
-
 For the chrome browser:
 
 How to start: run in server directory: node server.js
@@ -22,3 +20,5 @@ example: openssl req -new -x509 -nodes \
 open the chrome browser by running open_browser.sh so all flags are activated (chrome should be in the PATH variables)
 
 (Tip: You can open .sh script for example in GIT_BASH: documents/webtransport-1/server (main) $ ./open_browser.sh)
+
+In the Firefox browser you will get a security warning the first time but after pressing Continue it should work. Chrome is more strict with the security certificate...
