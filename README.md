@@ -5,6 +5,8 @@ The text-editor is simply quillJS.
 
 For the chrome browser:
 
+create an .env file in the root directory with your desired Server IP:  LOCAL_IP=***.***.*.***
+
 How to start: run in server directory: node server.js
 
 create cert.pem and key.pem in the server directory
